@@ -2,6 +2,17 @@ import algebra.ring.basic
 import tactic
 set_option old_structure_cmd true
 
+/-- A type endowed with `0`, `1` and `+` is an additive commutative monoid with one,
+if it admits an injective map that preserves `0`, `1` and `+` to an additive commutative monoid with
+one. -/
+@[reducible] -- See note [reducible non-instances]
+protected def function.injective.add_comm_monoid_with_one {M₁ M₂} [has_zero M₁] [has_one M₁] [has_add M₁] [has_smul ℕ M₁]
+  [has_nat_cast M₁] [add_comm_monoid_with_one M₂] (f : M₁ → M₂) (hf : function.injective f) (zero : f 0 = 0)
+  (one : f 1 = 1) (add : ∀ x y, f (x + y) = f x + f y) (nsmul : ∀ x (n : ℕ), f (n • x) = n • f x)
+  (nat_cast : ∀ n : ℕ, f n = n) :
+  add_comm_monoid_with_one M₁ :=
+{ ..hf.add_monoid_with_one f zero one add nsmul nat_cast, ..hf.add_comm_monoid f zero add nsmul }
+
 universes u
 
 @[protect_proj, ancestor add_monoid_with_one comm_monoid]
@@ -155,36 +166,41 @@ begin
 end
 
 
-class unit (α : Type u) [wheel α] (x : α) :=
-(inverse : α)
-(mul_inverse : x * inverse = 1)
+-- class unit (α : Type u) [wheel α] (x : α) :=
+-- (inverse : α)
+-- (mul_inverse : x * inverse = 1)
 
-lemma inverse_div_rel (x : W) (is_unit : unit W x) : is_unit.inverse + 0 * /x = /x + 0 * is_unit.inverse :=
+lemma inverse_div_rel (x : W) [invertible x] : ⅟ x + 0 * /x = /x + 0 * ⅟ x :=
 begin
-	calc is_unit.inverse + 0 * /x
-	    = is_unit.inverse * /(x * is_unit.inverse) + 0 * /x : by rw [is_unit.mul_inverse, div_one_eq_one, mul_one]
-	... = /x * (is_unit.inverse * /is_unit.inverse) + 0 * /x : by { rw [wheel.div_mul_distrib], nth_rewrite 1 mul_comm, rw [← mul_assoc, mul_comm], }
-	... = /x + 0 * is_unit.inverse * /(x * is_unit.inverse) : by { rw [div_self, mul_comm, wheel.add_distrib_mul, one_mul, wheel.div_mul_distrib], nth_rewrite 5 mul_comm, rw ← mul_assoc, }
-	... = /x + 0 * is_unit.inverse : by rw [is_unit.mul_inverse, div_one_eq_one, mul_one],
+	calc ⅟ x + 0 * /x
+	    = ⅟ x * /(x * ⅟ x) + 0 * /x : by rw [mul_inv_of_self, div_one_eq_one, mul_one]
+	... = /x * (⅟ x * /(⅟ x)) + 0 * /x : by { rw [wheel.div_mul_distrib], nth_rewrite 1 mul_comm, rw [← mul_assoc, mul_comm], }
+	... = /x + 0 * ⅟ x * /(x * ⅟ x) : by { rw [div_self, mul_comm, wheel.add_distrib_mul, one_mul, wheel.div_mul_distrib], nth_rewrite 5 mul_comm, rw ← mul_assoc, }
+	... = /x + 0 * ⅟ x : by rw [mul_inv_of_self, div_one_eq_one, mul_one],
 end
 
-lemma inverse_eq_div_add_zero_mul_inverse_self_div (x : W) (is_unit : unit W x) : is_unit.inverse = /x + 0 * is_unit.inverse * /is_unit.inverse :=
+lemma inverse_eq_div_add_zero_mul_inverse_self_div (x : W) [invertible x] : ⅟ x = /x + 0 * ⅟ x * /(⅟ x) :=
 begin
-	rw [← zero_mul_mul_eq_zero_mul_add_zero_mul, ← add_assoc, ← inverse_div_rel, add_assoc, zero_mul_mul_eq_zero_mul_add_zero_mul, mul_assoc, ← wheel.div_mul_distrib, is_unit.mul_inverse, div_one_eq_one, mul_one, add_zero],
+	rw [← zero_mul_mul_eq_zero_mul_add_zero_mul, ← add_assoc, ← inverse_div_rel, add_assoc, zero_mul_mul_eq_zero_mul_add_zero_mul, mul_assoc, ← wheel.div_mul_distrib, mul_inv_of_self, div_one_eq_one, mul_one, add_zero],
 end
 
-lemma div_eq_mul_add_self_div (x : W) (is_unit : unit W x) : /x = is_unit.inverse + 0 * x * /x :=
+lemma div_eq_mul_add_self_div (x : W) [invertible x] : /x = ⅟ x + 0 * x * /x :=
 begin
 	rw ← zero_mul_mul_eq_zero_mul_add_zero_mul,
 	nth_rewrite 1 add_comm,
 	rw [← add_assoc, inverse_div_rel, add_assoc, zero_mul_mul_eq_zero_mul_add_zero_mul, mul_assoc],
 	nth_rewrite 1 mul_comm,
-	rw [is_unit.mul_inverse, mul_one, add_zero],
+	rw [mul_inv_of_self, mul_one, add_zero],
 end
+
+def zero_mul_self_and_div_self_imp_unit : ∀ x : W, (0 * x = 0 ∧ 0 * /x = 0) → invertible x :=
+λ x hx, ⟨/x, by rw [mul_comm, wheel.div_self, hx.1, hx.2, add_zero], by rw [wheel.div_self, hx.1, hx.2, add_zero] ⟩
 
 
 @[reducible]
 def 𝓡 (α : Type u) [wheel α] := {x : α // (0 : α) * x = 0}
+
+namespace 𝓡
 
 instance : has_zero (𝓡 W) :=
 { zero := ⟨0, wheel.zero_mul⟩ }
@@ -221,21 +237,109 @@ instance : has_nat_cast (𝓡 W) :=
 		... = (N_n : W) * 0 + 1 * 0 : wheel.add_distrib_mul _ _ _
 		... = 0 : by rwa [mul_comm, N_ih, one_mul, add_zero], } }⟩ }
 
+instance : add_comm_monoid_with_one (𝓡 W) :=
+subtype.coe_injective.add_comm_monoid_with_one _ rfl rfl (λ _ _, rfl) (λ _ _, rfl) (λ _, rfl)
 
-instance : add_monoid_with_one (𝓡 W) := subtype.coe_injective.add_monoid_with_one _ rfl rfl (λ _ _, rfl) (λ _ _, rfl) (λ _, rfl)
+instance : has_mul (𝓡 W) :=
+{ mul := λ x y, ⟨x.1 * y.1,
+		begin
+			rw [← mul_assoc, ← wheel.zero_mul_mul_eq_zero_mul_add_zero_mul],
+			dsimp, rw [x.prop, y.prop, add_zero],
+		end⟩, }
 
-instance 𝓡.is_semiring : semiring (𝓡 W) :=
-{ add_comm := by { rintro ⟨a, ha⟩ ⟨b, hb⟩, dsimp only [(+)], ext, sorry },
-  mul := λ x y, ⟨x.1 * y.1, sorry⟩,
-  left_distrib := _,
-  right_distrib := _,
-  zero_mul := _,
-  mul_zero := _,
-  mul_assoc := _,
-  one_mul := _,
-  mul_one := _,
-  npow := _,
-..𝓡.add_monoid_with_one}
+instance : has_pow (𝓡 W) ℕ :=
+{ pow := λ x n, ⟨x.1 ^ n, 
+		begin
+			induction n,
+			{ rw [pow_zero, mul_one], },
+			{ rw [pow_succ, ← mul_assoc, ← wheel.zero_mul_mul_eq_zero_mul_add_zero_mul, n_ih],
+				dsimp, rw [x.prop, add_zero], }
+		end⟩ }
+
+instance : comm_monoid (𝓡 W) :=
+subtype.coe_injective.comm_monoid _ rfl (λ _ _, rfl) (λ _ _, rfl)
+
+@[simp, norm_cast] lemma coe_zero : ((0 : 𝓡 W) : W) = 0 := rfl
+@[simp, norm_cast] lemma coe_one : ((1 : 𝓡 W) : W) = 1 := rfl
+@[simp, norm_cast] lemma coe_add (a b : 𝓡 W) : (↑(a + b) : W) = a + b := rfl
+@[simp, norm_cast] lemma coe_nsmul (n : ℕ) (a : 𝓡 W) : (↑(n • a) : W) = n • a := rfl
+@[simp, norm_cast] lemma coe_nat_cast (n : ℕ) : ((n : 𝓡 W) : W) = n := rfl
+@[simp, norm_cast] lemma coe_mul (a b : 𝓡 W) : (↑(a * b) : W) = a * b := rfl
+-- @[simp, norm_cast] lemma coe_pow (a : 𝓡 W) ℕ : (↑(a ^ n) : W) = a ^ n := rfl
+
+instance : semiring (𝓡 W) :=
+{ left_distrib := 
+		begin
+			intros a b c,
+			ext, rw [coe_mul, coe_add, coe_add, coe_mul, coe_mul],
+			nth_rewrite 1 mul_comm, nth_rewrite 2 mul_comm,
+			rw [← wheel.add_distrib_mul, a.prop, add_zero, mul_comm],
+		end,
+  right_distrib :=
+		begin
+			intros a b c,
+			ext, rw [coe_mul, coe_add, coe_add, coe_mul, coe_mul],
+			rw [← wheel.add_distrib_mul, c.prop, add_zero],
+		end,
+  zero_mul := 
+		begin
+			intro a, 
+			ext, rw [coe_zero, coe_mul, coe_zero, a.prop],
+		end,
+  mul_zero := 
+		begin
+			intro a,
+			ext,
+			rw [mul_comm, coe_zero, coe_mul, coe_zero, a.prop],
+		end,
+  ..𝓡.add_comm_monoid_with_one, ..𝓡.comm_monoid }
+
+end 𝓡
+
+@[reducible]
+def 𝓢 (α : Type u) [wheel α] := {x : α // 0 * x = 0 ∧ 0 * /x = 0}
+
+namespace 𝓢
+
+instance : has_one (𝓢 W) :=
+{ one := ⟨1, mul_one 0, by rw [div_one_eq_one, mul_one] ⟩ }
+
+instance : has_mul (𝓢 W) :=
+{ mul := λ x y, ⟨x.1 * y.1, 
+		begin
+			dsimp, split,
+			{ rw [← mul_assoc, ← wheel.zero_mul_mul_eq_zero_mul_add_zero_mul, x.prop.1, y.prop.1, add_zero], },
+			{ rw [wheel.div_mul_distrib, ← mul_assoc, x.prop.2, y.prop.2] }
+		end⟩ }
+
+instance : has_pow (𝓢 W) ℕ :=
+{ pow := λ x n, ⟨x.1 ^ n,
+		begin
+			induction n,
+			{ simp only [pow_zero, mul_one, div_one_eq_one, and_self], },
+			{ rw pow_succ, dsimp at n_ih ⊢, rw [← mul_assoc, wheel.div_mul_distrib, ← mul_assoc, x.prop.1, x.prop.2, n_ih.1, n_ih.2], exact ⟨rfl, rfl⟩, }
+		end⟩ }
+
+instance : comm_monoid (𝓢 W) :=
+subtype.coe_injective.comm_monoid _ rfl (λ _ _, rfl) (λ _ _, rfl)
+
+instance : has_inv (𝓢 W) :=
+{ inv := λ x, ⟨/x.val, x.prop.2, by { rw wheel.div_invol, exact x.prop.1, }⟩ }
+
+@[simp, norm_cast] lemma coe_one : ((1 : 𝓢 W) : W) = 1 := rfl
+@[simp, norm_cast] lemma coe_mul (a b : 𝓢 W) : (↑(a * b) : W) = a * b := rfl
+@[simp, norm_cast] lemma coe_inv (a : 𝓢 W) : (↑(a⁻¹) : W) = /a := rfl
+
+instance : comm_group (𝓢 W) :=
+{ mul_left_inv :=
+		begin
+			intro a,
+			ext, simp only [coe_mul, coe_inv, coe_one],
+			rw [mul_comm, wheel.div_self, a.prop.1, a.prop.2, add_zero],
+		end,
+	..𝓢.comm_monoid, ..𝓢.has_inv }
+
+end 𝓢
 
 end wheel
 
