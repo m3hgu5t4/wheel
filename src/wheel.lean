@@ -194,7 +194,7 @@ begin
 end
 
 def zero_mul_self_and_div_self_imp_unit : ∀ x : W, (0 * x = 0 ∧ 0 * /x = 0) → invertible x :=
-λ x hx, ⟨/x, by rw [mul_comm, wheel.div_self, hx.1, hx.2, add_zero], by rw [wheel.div_self, hx.1, hx.2, add_zero] ⟩
+λ x hx, ⟨/x, by rw [mul_comm, wheel.div_self, hx.1, hx.2, add_zero], by rw [wheel.div_self, hx.1, hx.2, add_zero]⟩
 
 
 @[reducible]
@@ -222,20 +222,15 @@ instance : has_smul ℕ (𝓡 W) :=
 	induction n, 
 	{ rw [zero_nsmul, wheel.zero_mul] },
 	{ rw [succ_nsmul],
-		calc 0 * (x.1 + n_n • x.1)
-				= (x.1 + n_n • x.1) * 0 + 0 * 0 : by rw [wheel.zero_mul, add_zero, mul_comm]
-		... = x.1 * 0 + (n_n • x.1) * 0 : wheel.add_distrib_mul _ _ _
-		... = 0 : by rwa [mul_comm, x.2, zero_add, mul_comm], } }⟩ }
+		set nx : 𝓡 W := ⟨n_n • x.val, n_ih⟩,
+		exact (x + nx).prop, } }⟩ }
 
 instance : has_nat_cast (𝓡 W) :=
 { nat_cast := λ N, ⟨N, by { 
 	induction N,
 	{ rw [nat.cast_zero, wheel.zero_mul] },
 	{ rw nat.cast_succ,
-		calc 0 * ((N_n : W) + 1)
-				= ((N_n : W) + 1) * 0 + 0 * 0 : by rw [wheel.zero_mul, add_zero, mul_comm]
-		... = (N_n : W) * 0 + 1 * 0 : wheel.add_distrib_mul _ _ _
-		... = 0 : by rwa [mul_comm, N_ih, one_mul, add_zero], } }⟩ }
+		exact (⟨N_n, N_ih⟩ + 1 : 𝓡 W).prop, } }⟩ }
 
 instance : add_comm_monoid_with_one (𝓡 W) :=
 subtype.coe_injective.add_comm_monoid_with_one _ rfl rfl (λ _ _, rfl) (λ _ _, rfl) (λ _, rfl)
@@ -267,7 +262,7 @@ subtype.coe_injective.comm_monoid _ rfl (λ _ _, rfl) (λ _ _, rfl)
 @[simp, norm_cast] lemma coe_mul (a b : 𝓡 W) : (↑(a * b) : W) = a * b := rfl
 -- @[simp, norm_cast] lemma coe_pow (a : 𝓡 W) ℕ : (↑(a ^ n) : W) = a ^ n := rfl
 
-instance : semiring (𝓡 W) :=
+instance : comm_semiring (𝓡 W) :=
 { left_distrib := 
 		begin
 			intros a b c,
